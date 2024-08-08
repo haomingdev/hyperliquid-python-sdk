@@ -6,6 +6,7 @@ from eth_account.signers.local import LocalAccount
 
 from hyperliquid.api import API
 from hyperliquid.info import Info
+from hyperliquid.utils import constants as hl_constants
 from hyperliquid.utils.constants import MAINNET_API_URL
 from hyperliquid.utils.signing import (
     CancelRequest,
@@ -24,9 +25,9 @@ from hyperliquid.utils.signing import (
     sign_usd_transfer_action,
     sign_withdraw_from_bridge_action,
     sign_agent,
+    sign_spot_transfer_action,
 )
 from hyperliquid.utils.types import Any, List, Meta, SpotMeta, Optional, Tuple, Cloid
-
 
 class Exchange(API):
     # Default Max Slippage for Market Orders 5%
@@ -34,8 +35,9 @@ class Exchange(API):
 
     def __init__(
         self,
-        wallet: LocalAccount,
-        base_url: Optional[str] = None,
+        base_url,
+        wallet,
+        skip_ws=False,
         meta: Optional[Meta] = None,
         vault_address: Optional[str] = None,
         account_address: Optional[str] = None,
@@ -43,6 +45,7 @@ class Exchange(API):
     ):
         super().__init__(base_url)
         self.wallet = wallet
+        self.skip_ws = skip_ws
         self.vault_address = vault_address
         self.account_address = account_address
         self.info = Info(base_url, True, meta, spot_meta)
@@ -471,4 +474,21 @@ class Exchange(API):
                 timestamp,
             ),
             agent_key,
+        )
+
+    def spot_transfer(self, amount: float, destination: str, token_name: str, token_id: str):
+        timestamp = get_timestamp_ms()
+        action = {
+            "destination": destination,
+            "token": f"{token_name}:{token_id}",
+            "amount": str(amount),
+            "time": timestamp,
+            "type": "spotSend"
+        }
+        is_mainnet = self.base_url == hl_constants.MAINNET_API_URL
+        signature = sign_spot_transfer_action(self.wallet, action, is_mainnet)
+        return self._post_action(
+            action,
+            signature,
+            timestamp,
         )
